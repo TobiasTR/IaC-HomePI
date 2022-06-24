@@ -1,3 +1,6 @@
+#
+Simple ansible playbook for a personal raspberry pi server.
+
 ## with rpi-imager
 
 write the raspbian iso to sd card using rpi-imager
