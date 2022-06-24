@@ -1,0 +1,13 @@
+---
+- hosts: all
+  become: yes
+  
+  tasks:
+    - import_tasks: tasks/essential.yml
+  
+  handlers:
+  - name: Restart fail2ban
+    service:
+      name: fail2ban
+      state: restarted
+

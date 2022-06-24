@@ -1,0 +1,25 @@
+username: username
+
+packages:
+  - nano
+  - tmux
+  - htop
+  - speedtest-cli
+  - lm-sensors
+  - git
+  - libffi-dev
+  - libssl-dev
+  - python3
+  - python3-pip
+  - cgroupfs-mount
+  - apt-transport-https
+  - ca-certificates
+  - gnupg2
+  - curl
+  - software-properties-common
+  - virtualenv
+  - tree
+
+docker_dir: /opt/docker/data
+
+timezone: Europe/Oslo

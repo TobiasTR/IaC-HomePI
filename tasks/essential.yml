@@ -1,0 +1,181 @@
+- name: Update and upgrade apt packages (Debian and Ubuntu)
+  apt:
+    upgrade: yes
+    update_cache: yes
+    autoremove: yes
+
+
+- name: Install essential packages
+  apt:
+    name:  "{{ item }}"
+    state: present
+    update_cache: true
+  with_items: "{{packages}}"
+  become: true
+
+
+- name: Disable SSH password auth
+  become: true
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^#PasswordAuthentication yes"
+    line: "PasswordAuthentication no"
+  register: sshd_config
+
+
+- name: Allow sudo group to have passwordless sudo
+  become: true
+  lineinfile:
+    path: /etc/sudoers
+    state: present
+    regexp: '^%sudo'
+    line: '%sudo ALL=(ALL) NOPASSWD: ALL'
+    validate: '/usr/sbin/visudo -cf %s'
+
+
+- name: Restart SSH daemon
+  become: true
+  service: 
+    name: sshd
+    state: restarted
+  when: sshd_config.changed
+
+
+- name: Install fail2ban
+  become: true
+  package:
+    name: fail2ban
+    state: present
+
+
+- name: Make sure the fail2ban systemd service is enabled and started
+  become: true
+  service:
+    name: fail2ban
+    state: started
+    enabled: yes
+
+
+- name: Install the jail.local file
+  become: true
+  template:
+    src: "jail.local"
+    dest: "/etc/fail2ban/jail.local"
+    mode: 0644
+    owner: root
+    group: root
+  notify:
+    - Restart fail2ban
+
+- name: get docker convenience script
+  shell: curl -fsSL https://get.docker.com -o get-docker.sh
+  args:
+    creates: /home/{{username}}/get-docker.sh
+- name: install docker
+  shell: sh /home/{{username}}/get-docker.sh
+  args:
+    creates: /usr/bin/docker
+- name: make user execute docker commands
+  shell: usermod -aG docker {{username}}
+- name: install docker-compose
+  shell: pip3 -v install docker-compose
+  args:
+    creates: /usr/local/bin/docker-compose
+
+
+- name: Make sure Docker is running and enabled
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+
+- name: install lazy docker
+  become: true
+  shell: curl https://raw.githubusercontent.com/jesseduffield/lazydocker/master/scripts/install_update_linux.sh | bash
+  environment:
+    DIR: "/usr/bin/"
+  tags:
+    - lazydocker
+  
+
+- name: create docker directory's
+  block:
+  - name: Check if the persistent data folder exists
+    stat:
+      path: "{{ docker_dir }}"
+    register: persistent_data
+
+  - name: Create the persistent data folder on the remote machine
+    file:
+      dest: "{{ docker_dir }}"
+      state: directory
+      owner: "{{ username }}"
+      group: "{{ username }}"
+      mode: 0755
+      recurse: yes
+    when: not persistent_data.stat.exists
+  tags:
+    - folder
+
+
+- name: Make sure the PiHole container is created and running
+  docker_container:
+    name: PiHole
+    image: "pihole/pihole:latest"
+    published_ports:
+      - "0.0.0.0:8081:80/tcp"
+      - "0.0.0.0:8081:80/udp"
+      - "0.0.0.0:53:53/tcp"
+      - "0.0.0.0:53:53/udp"
+    pull: yes
+    state: 'started'
+    env:
+      "TZ": "{{ timezone }}"
+      "WEBPASSWORD": ""
+    volumes:
+      - "{{ docker_dir }}/pihole/etc-pihole:/etc/pihole"
+      - "{{ docker_dir }}/pihole/etc-dnsmasq.d:/etc/dnsmasq.d"
+    restart_policy: unless-stopped
+  tags:
+    - pihole
+
+
+- name: Make sure the homeassistant container is created and running
+  docker_container:
+    name: homeassistant
+    image: "homeassistant/home-assistant:stable"
+    network_mode: "bridge"
+    networks:
+      - name: smarthome
+    published_ports:
+      - 0.0.0.0:8082:8123/tcp
+    pull: yes
+    state: 'started'
+    env:
+      "TZ": "{{ timezone }}"
+    volumes:
+      - "{{ docker_dir }}/homeassistant/config:/config"
+    restart_policy: unless-stopped
+  tags:
+    - homeassistant
+
+
+- name: Make sure the ESPHome container is created and running
+  docker_container:
+    name: esphome
+    image: "esphome/esphome:latest"
+    network_mode: "bridge"
+    networks:
+      - name: smarthome
+    published_ports:
+      - 0.0.0.0:8083:6052/tcp
+    pull: yes
+    state: 'started' 
+    volumes:
+      - "{{ docker_dir }}/esphome/config:/config"
+      - /etc/localtime:/etc/localtime:ro
+    restart_policy: unless-stopped
+  tags:
+    - esphome
+
