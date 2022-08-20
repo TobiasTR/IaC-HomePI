@@ -68,16 +68,20 @@
     - Restart fail2ban
 
 - name: get docker convenience script
+  become: true
   shell: curl -fsSL https://get.docker.com -o get-docker.sh
   args:
     creates: /home/{{username}}/get-docker.sh
 - name: install docker
+  become: true
   shell: sh /home/{{username}}/get-docker.sh
   args:
     creates: /usr/bin/docker
 - name: make user execute docker commands
+  become: true
   shell: usermod -aG docker {{username}}
 - name: install docker-compose
+  become: true
   shell: pip3 -v install docker-compose
   args:
     creates: /usr/local/bin/docker-compose
@@ -145,9 +149,6 @@
   docker_container:
     name: homeassistant
     image: "homeassistant/home-assistant:stable"
-    network_mode: "bridge"
-    networks:
-      - name: smarthome
     published_ports:
       - 0.0.0.0:8082:8123/tcp
     pull: yes
@@ -165,9 +166,6 @@
   docker_container:
     name: esphome
     image: "esphome/esphome:latest"
-    network_mode: "bridge"
-    networks:
-      - name: smarthome
     published_ports:
       - 0.0.0.0:8083:6052/tcp
     pull: yes
